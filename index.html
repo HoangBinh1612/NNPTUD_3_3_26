@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- Header -->
+    <div class="dashboard-header text-center">
+        <div class="container">
+            <h1><i class="bi bi-box-seam"></i> Product Dashboard</h1>
+            <p class="mb-0 mt-2">Dữ liệu từ Platzi Fake Store API</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- Controls: Search + Limit -->
+        <div class="card-controls">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label for="searchInput" class="form-label"><i class="bi bi-search"></i> Tìm kiếm theo Title</label>
+                    <input type="text" id="searchInput" class="form-control" placeholder="Nhập tên sản phẩm...">
+                </div>
+                <div class="col-md-3">
+                    <label for="limitSelect" class="form-label"><i class="bi bi-list-ol"></i> Số item / trang</label>
+                    <select id="limitSelect" class="form-select">
+                        <option value="5" selected>5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                    </select>
+                </div>
+                <div class="col-md-3 text-end">
+                    <span id="totalInfo" class="badge-total">Tổng: 0 sản phẩm</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrapper">
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered align-middle mb-0" id="productTable">
+                    <thead>
+                        <tr>
+                            <th style="width:60px">ID</th>
+                            <th style="width:70px">Image</th>
+                            <th class="sortable" id="sortTitle">
+                                Title <span class="sort-icon" id="iconTitle">⇅</span>
+                            </th>
+                            <th class="sortable" style="width:120px" id="sortPrice">
+                                Price <span class="sort-icon" id="iconPrice">⇅</span>
+                            </th>
+                            <th style="width:150px">Category</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Dữ liệu sẽ được render ở đây -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-wrapper" id="paginationNav">
+                <nav>
+                    <ul class="pagination justify-content-center mb-0" id="pagination">
+                        <!-- Pagination sẽ được render ở đây -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div class="text-center py-5" id="loadingSpinner">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Đang tải dữ liệu...</p>
+        </div>
+
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // ============================================================
+        // BIẾN TOÀN CỤC
+        // ============================================================
+        let allProducts = [];           // Dữ liệu gốc từ API
+        let filteredProducts = [];      // Sau khi lọc theo keyword
+        let currentPage = 1;            // Trang hiện tại
+        let itemsPerPage = 5;           // Số item mỗi trang
+        let sortState = {               // Trạng thái sort
+            column: null,               // 'title' | 'price' | null
+            direction: 'asc'            // 'asc' | 'desc'
+        };
+
+        // ============================================================
+        // BƯỚC 2: FETCH API
+        // ============================================================
+        async function fetchProducts() {
+            try {
+                const response = await fetch('https://api.escuelajs.co/api/v1/products');
+                allProducts = await response.json();
+                filteredProducts = [...allProducts];
+                document.getElementById('loadingSpinner').style.display = 'none';
+                displayProducts();
+            } catch (error) {
+                console.error('Lỗi khi fetch API:', error);
+                document.getElementById('loadingSpinner').innerHTML =
+                    '<p class="text-danger">❌ Không thể tải dữ liệu. Vui lòng thử lại.</p>';
+            }
+        }
+
+        // ============================================================
+        // PIPELINE CHÍNH: filter → sort → paginate → render
+        // ============================================================
+        function displayProducts() {
+            // Bước 3: Lọc theo keyword
+            const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
+            filteredProducts = allProducts.filter(p =>
+                p.title.toLowerCase().includes(keyword)
+            );
+
+            // Bước 4: Sort
+            if (sortState.column) {
+                filteredProducts.sort((a, b) => {
+                    let valA, valB;
+                    if (sortState.column === 'title') {
+                        valA = a.title.toLowerCase();
+                        valB = b.title.toLowerCase();
+                    } else if (sortState.column === 'price') {
+                        valA = a.price;
+                        valB = b.price;
+                    }
+                    if (valA < valB) return sortState.direction === 'asc' ? -1 : 1;
+                    if (valA > valB) return sortState.direction === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+
+            // Cập nhật tổng
+            document.getElementById('totalInfo').textContent = `Tổng: ${filteredProducts.length} sản phẩm`;
+
+            // Bước 5: Phân trang
+            const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+            if (currentPage > totalPages) currentPage = totalPages || 1;
+            const start = (currentPage - 1) * itemsPerPage;
+            const paginatedProducts = filteredProducts.slice(start, start + itemsPerPage);
+
+            // Bước 2 + 6: Render bảng + tooltip
+            renderTable(paginatedProducts);
+            renderPagination(totalPages);
+        }
+
+        // ============================================================
+        // BƯỚC 2 + 6: RENDER BẢNG + TOOLTIP DESCRIPTION
+        // ============================================================
+        function renderTable(products) {
+            const tbody = document.getElementById('tableBody');
+
+            if (products.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">
+                            Không tìm thấy sản phẩm nào.
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            tbody.innerHTML = products.map(product => {
+                // Lấy ảnh đầu tiên, xử lý trường hợp ảnh lỗi
+                const imgSrc = (product.images && product.images.length > 0)
+                    ? product.images[0].replace(/[\[\]"]/g, '')
+                    : 'https://via.placeholder.com/50';
+
+                // Cắt description cho tooltip (tránh quá dài)
+                const desc = product.description || 'Không có mô tả';
+
+                return `
+                    <tr data-bs-toggle="tooltip" 
+                        data-bs-placement="top" 
+                        data-bs-title="${desc.replace(/"/g, '&quot;')}"
+                    >
+                        <td class="text-center fw-bold">${product.id}</td>
+                        <td class="text-center">
+                            <img src="${imgSrc}" 
+                                 alt="${product.title}" 
+                                 class="product-img"
+                                 onerror="this.src='https://via.placeholder.com/50?text=No+Img'">
+                        </td>
+                        <td>${product.title}</td>
+                        <td class="text-end price-text">$${product.price}</td>
+                        <td>
+                            <span class="badge-category">${product.category?.name || 'N/A'}</span>
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            // Khởi tạo Bootstrap Tooltip cho các dòng mới
+            initTooltips();
+        }
+
+        // ============================================================
+        // BƯỚC 6: KHỞI TẠO TOOLTIPS
+        // ============================================================
+        function initTooltips() {
+            // Huỷ tooltip cũ trước
+            const existingTooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            existingTooltips.forEach(el => {
+                const existing = bootstrap.Tooltip.getInstance(el);
+                if (existing) existing.dispose();
+                new bootstrap.Tooltip(el);
+            });
+        }
+
+        // ============================================================
+        // BƯỚC 5: RENDER PAGINATION
+        // ============================================================
+        function renderPagination(totalPages) {
+            const pagination = document.getElementById('pagination');
+
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+
+            // Nút Previous
+            html += `
+                <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                    <a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">← Trước</a>
+                </li>`;
+
+            // Số trang
+            for (let i = 1; i <= totalPages; i++) {
+                html += `
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+                    </li>`;
+            }
+
+            // Nút Next
+            html += `
+                <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                    <a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">Sau →</a>
+                </li>`;
+
+            pagination.innerHTML = html;
+        }
+
+        function goToPage(page) {
+            const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            displayProducts();
+        }
+
+        // ============================================================
+        // BƯỚC 3: SỰ KIỆN TÌM KIẾM (onChange / oninput)
+        // ============================================================
+        document.getElementById('searchInput').addEventListener('input', function () {
+            currentPage = 1; // Reset về trang 1 khi tìm kiếm
+            displayProducts();
+        });
+
+        // ============================================================
+        // BƯỚC 4: SỰ KIỆN SORT
+        // ============================================================
+        document.getElementById('sortTitle').addEventListener('click', function () {
+            toggleSort('title');
+        });
+
+        document.getElementById('sortPrice').addEventListener('click', function () {
+            toggleSort('price');
+        });
+
+        function toggleSort(column) {
+            if (sortState.column === column) {
+                // Toggle hướng sort
+                sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortState.column = column;
+                sortState.direction = 'asc';
+            }
+            updateSortIcons();
+            currentPage = 1;
+            displayProducts();
+        }
+
+        function updateSortIcons() {
+            // Reset tất cả icon
+            document.getElementById('iconTitle').textContent = '⇅';
+            document.getElementById('iconPrice').textContent = '⇅';
+
+            // Cập nhật icon cho cột đang sort
+            if (sortState.column === 'title') {
+                document.getElementById('iconTitle').textContent =
+                    sortState.direction === 'asc' ? '▲' : '▼';
+            } else if (sortState.column === 'price') {
+                document.getElementById('iconPrice').textContent =
+                    sortState.direction === 'asc' ? '▲' : '▼';
+            }
+        }
+
+        // ============================================================
+        // BƯỚC 5: SỰ KIỆN CHỌN SỐ ITEM/TRANG
+        // ============================================================
+        document.getElementById('limitSelect').addEventListener('change', function () {
+            itemsPerPage = parseInt(this.value);
+            currentPage = 1; // Reset về trang 1
+            displayProducts();
+        });
+
+        // ============================================================
+        // KHỞI CHẠY
+        // ============================================================
+        fetchProducts();
+    </script>
+
+</body>
+
+</html>
